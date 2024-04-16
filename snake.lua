@@ -2,17 +2,19 @@ Camera = require("camera")
 Snake = {}
 
 SIZE = 0.2
+
 SPEED_LOW = 100
 SPEED_NORMAL = 200
-SPEED_HIGH = 275
+SPEED_HIGH = 280
 
 Snake.info = {
-  body_nums = 1,
-  accelerate = 250,
+  body_nums = 0,
+  accelerate = 275,
   rot_speed = math.pi * 0.5,
 }
 
 Snake.head = {
+  name = "head",
   info = {
     _x = 0,
     _y = 0,
@@ -22,11 +24,13 @@ Snake.head = {
     ox = 0,
     oy = 0,
   },
-  image = love.graphics.newImage("images/head.png"),
+  color = { 0, 153 / 255, 76 / 255 },
+  radius = 0,
   speed = 250,
+  image = love.graphics.newImage("images/head.png"),
 }
 
-Body = {}
+Snake.body = {}
 
 --[[
 Snake.body = {
@@ -54,6 +58,7 @@ Snake.tail = {
     ox = 0,
     oy = 0,
   },
+  radius = 0,
   speed = 250,
   image = love.graphics.newImage("images/tail.png"),
 }
@@ -74,6 +79,7 @@ function Snake:init(_x, _y)
   self.head.info._y = _y
   self.head.info.ox = self.head.image:getWidth() / 2
   self.head.info.oy = self.head.image:getHeight() / 2
+  self.head.radius = (self.head.info.ox + self.head.info.oy) * SIZE / 2
 
   for i = 1, 10, 1 do
     local body = {
@@ -86,40 +92,55 @@ function Snake:init(_x, _y)
         ox = 0,
         oy = 0,
       },
-      image = love.graphics.newImage("images/body.png"),
+      radius = 0,
       speed = 250,
+      image = love.graphics.newImage("images/body.png"),
     }
     body.info.ox = body.image:getWidth() / 2
     body.info.oy = body.image:getHeight() / 2
+    body.radius = (body.info.ox + body.info.oy) * SIZE / 2
 
-    table.insert(Body, body)
+    table.insert(self.body, body)
   end
+
   self.tail.info._x = _x - 300
   self.tail.info._x = _y - 300
   self.tail.info.ox = self.tail.image:getWidth() / 2
   self.tail.info.oy = self.tail.image:getHeight() / 2
-  table.insert(Body, self.tail)
+  self.tail.radius = (self.tail.info.ox + self.tail.info.oy) * SIZE / 2
+  table.insert(self.body, self.tail)
 end
 
 function Snake:move(dt, border)
   border = border or {
-    HEIGHT = 0,
-    WIDTH = 0,
+    height = 0,
+    width = 0,
   }
-  self.head.info._x = self.head.info._x + dt * self.head.speed * math.cos(self.head.info.rot)
-  self.head.info._y = self.head.info._y + dt * self.head.speed * math.sin(self.head.info.rot)
+  local new_x = self.head.info._x + dt * self.head.speed * math.cos(self.head.info.rot)
+  local new_y = self.head.info._y + dt * self.head.speed * math.sin(self.head.info.rot)
+
+  if
+      new_x - self.head.info.ox * SIZE >= 0
+      and new_x + self.head.info.ox * SIZE < border.width
+      and new_y - self.head.info.oy * SIZE >= 0
+      and new_y + self.head.info.oy * SIZE < border.height
+  then
+    self.head.info._x = new_x
+    self.head.info._y = new_y
+  end
 
   self:keyboard_reaction(dt)
+  Snake.info.body_nums = #self.body
   self:move_body(dt)
 end
 
 function Snake:move_body(dt)
-  for i, body in ipairs(Body) do
+  for i, body in ipairs(self.body) do
     local pre = {}
     if i == 1 then
       pre = self.head
     else
-      pre = Body[i - 1]
+      pre = self.body[i - 1]
     end
     body.info._x = body.info._x + dt * body.speed * math.cos(body.info.rot)
     body.info._y = body.info._y + dt * body.speed * math.sin(body.info.rot)
@@ -127,7 +148,7 @@ function Snake:move_body(dt)
     local dangle = angle(body.info, pre.info)
     body.info.rot = dangle
 
-    if distance(body.info, pre.info) >= 90 and body.speed <= SPEED_HIGH then
+    if distance(body.info, pre.info) >= 75 and body.speed <= SPEED_HIGH then
       body.speed = body.speed + dt * self.info.accelerate
       goto continue
     elseif distance(body.info, pre.info) <= 50 and body.speed >= SPEED_LOW then
@@ -169,19 +190,8 @@ function Snake:keyboard_reaction(dt)
 end
 
 function Snake:draw()
-  love.graphics.setColor(1, 1, 1)
-  love.graphics.draw(
-    self.head.image,
-    self.head.info._x,
-    self.head.info._y,
-    self.head.info.rot,
-    self.head.info.sx,
-    self.head.info.sy,
-    self.head.info.ox,
-    self.head.info.oy
-  )
-
-  for i, body in ipairs(Body) do
+  love.graphics.setColor(self.head.color)
+  for _, body in ipairs(self.body) do
     love.graphics.draw(
       body.image,
       body.info._x,
