@@ -1,4 +1,3 @@
-Camera = require("camera")
 Snake = {}
 
 SIZE = 0.2
@@ -9,7 +8,7 @@ SPEED_HIGH = 280
 
 Snake.info = {
   body_nums = 0,
-  accelerate = 275,
+  accelerate = 250,
   rot_speed = math.pi * 0.5,
 }
 
@@ -31,22 +30,6 @@ Snake.head = {
 }
 
 Snake.body = {}
-
---[[
-Snake.body = {
-  info = {
-    _x = 0,
-    _y = 0,
-    rot = 0,
-    sx = SIZE,
-    sy = SIZE,
-    ox = 0,
-    oy = 0,
-  },
-  image = love.graphics.newImage("images/body.png"),
-  speed = 250,
-}
-]]
 
 Snake.tail = {
   info = {
@@ -84,7 +67,7 @@ function Snake:init(_x, _y)
   for i = 1, 10, 1 do
     local body = {
       info = {
-        _x = _x - 25 * i,
+        _x = _x - 30 * i,
         _y = _y,
         rot = 0,
         sx = SIZE,
@@ -103,8 +86,8 @@ function Snake:init(_x, _y)
     table.insert(self.body, body)
   end
 
-  self.tail.info._x = _x - 300
-  self.tail.info._x = _y - 300
+  self.tail.info._x = _x - 330
+  self.tail.info._y = _y
   self.tail.info.ox = self.tail.image:getWidth() / 2
   self.tail.info.oy = self.tail.image:getHeight() / 2
   self.tail.radius = (self.tail.info.ox + self.tail.info.oy) * SIZE / 2

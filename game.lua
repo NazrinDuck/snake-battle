@@ -2,12 +2,13 @@ Basic = require("basic")
 
 Game = {}
 
-TIME_SNAP = 5
+TIME_SNAP = 10
 VALUE = 10
+MAX = 10
 
 Game.resource = {
   name = "resource",
-  radius = 20,
+  radius = 10,
   color = { 50 / 255, 50 / 255, 255 / 255 },
   timer = 0,
   mesh = nil,
@@ -44,10 +45,14 @@ end
 function Game:game_start(dt, player)
   self:generate_resource(dt)
   self:eat_resource(player)
+
+  local width, height = love.graphics.getDimensions()
+  Basic.info.WINDOWS.WIDTH = width
+  Basic.info.WINDOWS.HEIGHT = height
 end
 
 function Game:generate_resource(dt)
-  if #self.resource.resources > 20 then
+  if #self.resource.resources > MAX then
     return
   end
 

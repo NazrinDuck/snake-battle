@@ -29,6 +29,7 @@ Basic.minimap = {
   height = 250,
   width = 250,
   mesh = nil,
+  border_mesh = nil,
 }
 
 ---basic minimap---
@@ -102,6 +103,18 @@ function Basic:init(objects)
     table.insert(vertices, { x, y, u, v })
   end
   self.minimap.mesh = love.graphics.newMesh(vertices, "fan")
+
+  local height = self.info.WINDOWS.HEIGHT * self.minimap.height / self:get_map_border().height
+  local width = self.info.WINDOWS.WIDTH * self.minimap.width / self:get_map_border().width
+
+  local vertices_border = {
+    { -width / 2, -height / 2, 0, 0, 1, 1, 1 },
+    { width / 2,  -height / 2, 1, 0, 1, 1, 1 },
+    { width / 2,  height / 2,  1, 0, 1, 1, 1 },
+    { -width / 2, height / 2,  0, 0, 1, 1, 1 },
+  }
+
+  self.minimap.border_mesh = love.graphics.newMesh(vertices_border, "fan")
 end
 
 function Basic:draw()
@@ -136,7 +149,14 @@ function Basic:draw()
     if object.name == "resource" then
       for _, resource in ipairs(object.resources) do
         love.graphics.setColor(object.color)
-        love.graphics.draw(object.mesh, resource.info._x, resource.info._y, 0, object.radius, object.radius)
+        love.graphics.draw(
+          object.mesh,
+          resource.info._x,
+          resource.info._y,
+          0,
+          resource.radius + 2 * resource.value,
+          resource.radius + 2 * resource.value
+        )
       end
       goto continue
     end
@@ -155,15 +175,18 @@ function Basic:draw_minimap()
 
   for _, object in ipairs(self.objects) do
     if object.name == "head" then
+      love.graphics.setColor(0.8, 0, 0, 0.3)
+      love.graphics.draw(self.minimap.border_mesh, object.map_x, object.map_y, 0, 1, 1)
+
       love.graphics.setColor(object.map_color)
-      love.graphics.draw(self.minimap.mesh, object.map_x, object.map_y, 0, 5, 5)
+      love.graphics.draw(self.minimap.mesh, object.map_x, object.map_y, 0, 4, 4)
       goto continue
     end
 
     if object.name == "resource" then
       for _, resource in ipairs(object.resources) do
         love.graphics.setColor(resource.map_color)
-        love.graphics.draw(self.minimap.mesh, resource.map_x, resource.map_y, 0, 5, 5)
+        love.graphics.draw(self.minimap.mesh, resource.map_x, resource.map_y, 0, 4, 4)
       end
       goto continue
     end
