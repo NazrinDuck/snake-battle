@@ -9,8 +9,8 @@ Basic.info = {
       _x = 0,
       _y = 0,
       rot = 0,
-      sx = 4,
-      sy = 4,
+      sx = 3,
+      sy = 3,
       ox = 0,
       oy = 0,
     },
@@ -23,59 +23,8 @@ Basic.info = {
 }
 
 Basic.objects = {}
-Basic.minimap = {
-  _x = 0,
-  _y = 0,
-  height = 250,
-  width = 250,
-  mesh = nil,
-  border_mesh = nil,
-}
 
----basic minimap---
-function Basic:add_point(object, color)
-  if object == nil then
-    return {}
-  end
-  local map_point = {
-    map_x = object.info._x * (self.minimap.width / self.info.WINDOWS.WIDTH),
-    map_y = object.info._y * (self.minimap.height / self.info.WINDOWS.HEIGHT),
-    map_color = color,
-  }
-
-  object = setmetatable(object, {
-    __index = map_point,
-  })
-  table.insert(self.objects, object)
-
-  return object
-end
-
-function Basic:map_minimap()
-  for _, object in ipairs(self.objects) do
-    if object.name == "head" then
-      object.map_x = object.info._x * (self.minimap.width / self:get_map_border().width)
-      object.map_y = object.info._y * (self.minimap.height / self:get_map_border().height)
-      goto continue
-    end
-
-    if object.name == "resource" then
-      for _, resource in ipairs(object.resources) do
-        resource.map_x = resource.info._x * (self.minimap.width / self:get_map_border().width)
-        resource.map_y = resource.info._y * (self.minimap.height / self:get_map_border().height)
-      end
-      goto continue
-    end
-    ::continue::
-  end
-end
-
-function Basic:init(objects)
-  if type(objects) == "table" then
-    for _, object in ipairs(objects) do
-      self:add_point(object.item, object.color)
-    end
-  end
+function Basic:init()
   local success = love.window.setMode(
     self.info.WINDOWS.WIDTH,
     self.info.WINDOWS.HEIGHT,
@@ -84,37 +33,6 @@ function Basic:init(objects)
   if not success then
     print("fail")
   end
-
-  --segments = segments or 40
-  local segments = 60
-  local vertices = {}
-
-  table.insert(vertices, { 0, 0, 0.5, 0.5, 255, 255, 255 })
-
-  for i = 0, segments do
-    local angle = (i / segments) * math.pi * 2
-
-    local x = math.cos(angle)
-    local y = math.sin(angle)
-
-    local u = (x + 1) * 0.5
-    local v = (y + 1) * 0.5
-
-    table.insert(vertices, { x, y, u, v })
-  end
-  self.minimap.mesh = love.graphics.newMesh(vertices, "fan")
-
-  local height = self.info.WINDOWS.HEIGHT * self.minimap.height / self:get_map_border().height
-  local width = self.info.WINDOWS.WIDTH * self.minimap.width / self:get_map_border().width
-
-  local vertices_border = {
-    { -width / 2, -height / 2, 0, 0, 1, 1, 1 },
-    { width / 2,  -height / 2, 1, 0, 1, 1, 1 },
-    { width / 2,  height / 2,  1, 0, 1, 1, 1 },
-    { -width / 2, height / 2,  0, 0, 1, 1, 1 },
-  }
-
-  self.minimap.border_mesh = love.graphics.newMesh(vertices_border, "fan")
 end
 
 function Basic:draw()
@@ -161,35 +79,35 @@ function Basic:draw()
       goto continue
     end
 
-    ::continue::
-  end
-  --[[
-]]
-end
-
-function Basic:draw_minimap()
-  love.graphics.setColor(0, 0, 0)
-  love.graphics.rectangle("line", self.minimap._x, self.minimap._y, self.minimap.width, self.minimap.height)
-  love.graphics.setColor(0.8, 0.8, 0.8, 0.8)
-  love.graphics.rectangle("fill", self.minimap._x, self.minimap._y, self.minimap.width, self.minimap.height)
-
-  for _, object in ipairs(self.objects) do
-    if object.name == "head" then
-      love.graphics.setColor(0.8, 0, 0, 0.3)
-      love.graphics.draw(self.minimap.border_mesh, object.map_x, object.map_y, 0, 1, 1)
-
-      love.graphics.setColor(object.map_color)
-      love.graphics.draw(self.minimap.mesh, object.map_x, object.map_y, 0, 4, 4)
-      goto continue
-    end
-
-    if object.name == "resource" then
-      for _, resource in ipairs(object.resources) do
-        love.graphics.setColor(resource.map_color)
-        love.graphics.draw(self.minimap.mesh, resource.map_x, resource.map_y, 0, 4, 4)
+    if object.name == "enemy" then
+      for _, snake in ipairs(object) do
+        love.graphics.setColor(snake.color)
+        love.graphics.draw(
+          snake.head.image,
+          snake.head.info._x,
+          snake.head.info._y,
+          snake.head.info.rot,
+          snake.head.info.sx,
+          snake.head.info.sy,
+          snake.head.info.ox,
+          snake.head.info.oy
+        )
+        for _, body in ipairs(snake.bodys) do
+          love.graphics.draw(
+            body.image,
+            body.info._x,
+            body.info._y,
+            body.info.rot,
+            body.info.sx,
+            body.info.sy,
+            body.info.ox,
+            body.info.oy
+          )
+        end
       end
       goto continue
     end
+
     ::continue::
   end
 end

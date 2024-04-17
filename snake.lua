@@ -2,15 +2,18 @@ Snake = {}
 
 SIZE = 0.2
 
-SPEED_LOW = 100
-SPEED_NORMAL = 200
+SPEED_LOW = 125
+SPEED_NORMAL = 225
 SPEED_HIGH = 280
 
 Snake.info = {
-  body_nums = 0,
+  body_nums = 1,
   accelerate = 250,
   rot_speed = math.pi * 0.5,
+  color = { 0, 153 / 255, 76 / 255 },
 }
+
+Snake.snake = {}
 
 Snake.head = {
   name = "head",
@@ -23,9 +26,9 @@ Snake.head = {
     ox = 0,
     oy = 0,
   },
-  color = { 0, 153 / 255, 76 / 255 },
+  color = Snake.info.color,
   radius = 0,
-  speed = 250,
+  speed = SPEED_NORMAL,
   image = love.graphics.newImage("images/head.png"),
 }
 
@@ -42,8 +45,18 @@ Snake.tail = {
     oy = 0,
   },
   radius = 0,
-  speed = 250,
+  speed = SPEED_NORMAL,
   image = love.graphics.newImage("images/tail.png"),
+}
+
+Snake.bullet = {
+  bullets = {},
+  mesh = nil,
+  speed = 150,
+  radius = 12,
+  fly_time = 3,
+  shoot_gap = 1.5,
+  timer = 0,
 }
 
 local function distance(a, b)
@@ -64,34 +77,53 @@ function Snake:init(_x, _y)
   self.head.info.oy = self.head.image:getHeight() / 2
   self.head.radius = (self.head.info.ox + self.head.info.oy) * SIZE / 2
 
-  for i = 1, 10, 1 do
-    local body = {
-      info = {
-        _x = _x - 30 * i,
-        _y = _y,
-        rot = 0,
-        sx = SIZE,
-        sy = SIZE,
-        ox = 0,
-        oy = 0,
-      },
-      radius = 0,
-      speed = 250,
-      image = love.graphics.newImage("images/body.png"),
-    }
-    body.info.ox = body.image:getWidth() / 2
-    body.info.oy = body.image:getHeight() / 2
-    body.radius = (body.info.ox + body.info.oy) * SIZE / 2
+  local body = {
+    info = {
+      _x = _x - 30,
+      _y = _y,
+      rot = 0,
+      sx = SIZE,
+      sy = SIZE,
+      ox = 0,
+      oy = 0,
+    },
+    radius = 0,
+    speed = 250,
+    image = love.graphics.newImage("images/body.png"),
+  }
+  body.info.ox = body.image:getWidth() / 2
+  body.info.oy = body.image:getHeight() / 2
+  body.radius = (body.info.ox + body.info.oy) * SIZE / 2
 
-    table.insert(self.body, body)
-  end
+  table.insert(self.body, body)
 
-  self.tail.info._x = _x - 330
+  self.tail.info._x = _x - 60
   self.tail.info._y = _y
   self.tail.info.ox = self.tail.image:getWidth() / 2
   self.tail.info.oy = self.tail.image:getHeight() / 2
   self.tail.radius = (self.tail.info.ox + self.tail.info.oy) * SIZE / 2
   table.insert(self.body, self.tail)
+
+  self:init_mesh()
+end
+
+function Snake:init_mesh()
+  local segments = 60
+  local vertices = {}
+
+  table.insert(vertices, { 0, 0, 0.5, 0.5, 1, 1, 1, 0.6 })
+
+  for i = 0, segments do
+    local a = (i / segments) * math.pi * 2
+
+    local x = math.cos(a)
+    local y = math.sin(a)
+
+    local u = (x + 1) * 0.5
+    local v = (y + 1) * 0.5
+    table.insert(vertices, { x, y, u, v })
+  end
+  self.bullet.mesh = love.graphics.newMesh(vertices, "fan")
 end
 
 function Snake:move(dt, border)
@@ -113,8 +145,9 @@ function Snake:move(dt, border)
   end
 
   self:keyboard_reaction(dt)
-  Snake.info.body_nums = #self.body
+  self:shoot(dt)
   self:move_body(dt)
+  self:move_bullet(dt)
 end
 
 function Snake:move_body(dt)
@@ -166,14 +199,13 @@ function Snake:keyboard_reaction(dt)
   if love.keyboard.isDown("left") then
     self.head.info.rot = self.head.info.rot - self.info.rot_speed * dt
   end
-  --self.head.info._x >= 0 + self.head.info.ox * self.head.info.sx
   if love.keyboard.isDown("right") then
     self.head.info.rot = self.head.info.rot + self.info.rot_speed * dt
   end
 end
 
 function Snake:draw()
-  love.graphics.setColor(self.head.color)
+  love.graphics.setColor(self.info.color)
   for _, body in ipairs(self.body) do
     love.graphics.draw(
       body.image,
@@ -185,15 +217,89 @@ function Snake:draw()
       body.info.ox,
       body.info.oy
     )
+  end
+  self:draw_bullet()
+end
 
-    --[[
-    local dangle = angle(body.info, self.head.info)
-    local d = distance(body.info, self.head.info)
-    love.graphics.print("dangle: " .. tostring(dangle), 0, 100 + 25 * i)
-    love.graphics.print("d: " .. tostring(d), 0, 125 + 25 * i)
-    love.graphics.print("dx: " .. tostring(body.info._x - self.head.info._x), 0, 150 + 25 * i)
-    --]]
+function Snake:add_body()
+  local index = #self.body - 1
+  local new_x = self.body[index].info._x
+  local new_y = self.body[index].info._y
+  local new_rot = self.body[index].info.rot
+
+  local body = {
+    info = {
+      _x = new_x,
+      _y = new_y,
+      rot = new_rot,
+      sx = SIZE,
+      sy = SIZE,
+      ox = 0,
+      oy = 0,
+    },
+    radius = 0,
+    speed = 250,
+    image = love.graphics.newImage("images/body.png"),
+  }
+  body.info.ox = body.image:getWidth() / 2
+  body.info.oy = body.image:getHeight() / 2
+  body.radius = (body.info.ox + body.info.oy) * SIZE / 2
+
+  table.insert(self.body, index, body)
+
+  Snake.info.body_nums = #self.body
+end
+
+----- shoot start -----
+
+function Snake:shoot(dt)
+  if self.bullet.timer < self.bullet.shoot_gap then
+    self.bullet.timer = self.bullet.timer + dt
+    return
+  end
+
+  if love.keyboard.isDown("z") and self.bullet.timer >= self.bullet.shoot_gap then
+    self.bullet.timer = 0
+    local bullet = {
+      info = {
+        _x = self.head.info._x,
+        _y = self.head.info._y,
+        rot = self.head.info.rot,
+      },
+      speed = self.bullet.speed + self.head.speed,
+      color = self.info.color,
+      timer = 0,
+    }
+    table.insert(self.bullet.bullets, bullet)
   end
 end
+
+function Snake:move_bullet(dt)
+  for i, bullet in ipairs(self.bullet.bullets) do
+    local rot = bullet.info.rot
+    bullet.info._x = bullet.info._x + bullet.speed * dt * math.cos(rot)
+    bullet.info._y = bullet.info._y + bullet.speed * dt * math.sin(rot)
+    bullet.timer = bullet.timer + dt
+    if bullet.timer > self.bullet.fly_time then
+      table.remove(self.bullet.bullets, i)
+    end
+  end
+end
+
+function Snake:draw_bullet()
+  for _, bullet in ipairs(self.bullet.bullets) do
+    love.graphics.setColor(bullet.color)
+    love.graphics.draw(
+      self.bullet.mesh,
+      bullet.info._x,
+      bullet.info._y,
+      bullet.info.rot,
+      self.bullet.radius,
+      self.bullet.radius
+    )
+  end
+end
+
+----- shoot end -----
 
 return Snake
