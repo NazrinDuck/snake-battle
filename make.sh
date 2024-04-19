@@ -6,6 +6,4 @@ else
   dir="./build/"
 fi
 
-zip -q -r ${dir}snake.zip ./ui ./game ./game.lua ./main.lua ./const.lua ./images ./audios
-
-mv ${dir}snake.zip ${dir}snake.love
+zip -q -r ${dir}snake.love ./ui ./game ./game.lua ./main.lua ./const.lua ./images ./audios

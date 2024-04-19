@@ -18,19 +18,11 @@
 
 ---
 
-### 1
+1. Windows11: 运行make.bat文件。
 
----
+   Linux:运行make.sh文件。
 
-Windows11: 运行make.bat文件.
-
-Linux:运行make.sh文件。
-
-### 2
-
----
-
-运行build目录下的snake.love
+2. 运行build目录下的snake.love
 
 ## 代码简介
 
