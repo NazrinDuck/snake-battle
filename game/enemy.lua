@@ -51,7 +51,7 @@ function Enemy:move(dt, border, player, func_shoot)
     end
 
     ------ track ------
-    Enemy:track_player(dt, Snake.snake, snake, func_shoot)
+    Enemy:track_player(dt, Snake.snake, snake)
     ::skip_track::
 
     ------ if collision ------
