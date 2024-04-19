@@ -1,16 +1,12 @@
-Basic = require("basic")
-Snake = require("snake")
-Enemy = require("enemy")
-Minimap = require("minimap")
-Health = require("health")
+Basic = require("game.basic")
+Snake = require("game.snake")
+Enemy = require("game.enemy")
+Minimap = require("ui.minimap")
+Health = require("ui.health")
+Bullet = require("game.bullet")
 require("const")
 
 Game = {}
-
-TIME_GAP = 5
-RESOURCE_VALUE = 10
-MAX_RESOURCES = 10
-MAX_SCORE = 50
 
 Game.sum_score = 0
 Game.score = 0
@@ -57,6 +53,8 @@ function Game:init()
     width = Basic.info.WINDOWS.WIDTH,
   }, Basic:get_map_border())
   Health:init()
+  Bullet:init()
+  Bullet:add_trait(Snake.snake.head, 0.5)
 
   self:init_mesh()
   table.insert(Basic.objects, self.resource)
@@ -65,7 +63,7 @@ function Game:init()
   table.insert(Basic.objects, Snake.snake)
 
   table.insert(Basic.objects, Enemy.snake.snakes)
-  --self:add_enemy_snake()
+  self:add_enemy_snake()
 end
 
 function Game:init_mesh()
@@ -99,27 +97,42 @@ function Game:init_mesh()
 end
 
 function Game:game_start(dt)
-  self:generate_resource(dt)
+  Basic.info.FPS.fps = love.timer.getFPS()
+
+  if #Enemy.snake.snakes <= 1 then
+    self:generate_resource(dt)
+  end
   self:eat_resource()
   self:check_hit()
   Minimap:map_minimap(Basic.objects)
-  Health:update(Basic.objects)
+  Health:update(Basic.objects, self.sum_score)
 
   Snake:move(dt, Basic:get_map_border(), Enemy.snake.snakes)
-  Enemy:move(dt, Basic:get_map_border(), Snake.snake)
+  Enemy:move(dt, Basic:get_map_border(), Snake.snake, Bullet.shoot)
+  Bullet:move(dt)
+
+  if love.keyboard.isDown("z") then
+    Bullet.shoot(Snake.snake.head, "player")
+  end
 end
 
 function Game:draw_game()
   Basic:draw_background()
   Basic:draw_objects()
-  Snake:draw()
   Health:draw_health(Basic.objects)
+  Bullet:draw()
 end
 
 function Game:draw_ui()
   Minimap:draw_minimap(Basic.objects)
   self:draw_score()
   self:draw_score_bar()
+  love.graphics.setColor(1, 0.2, 0.2, 1)
+  love.graphics.print(
+    "time: " .. tostring(math.floor((love.timer.getTime() - START_TIME) * 10) / 10),
+    Basic.info.FPS.x,
+    Basic.info.FPS.y + 50
+  )
 end
 
 ---resource start---
@@ -174,11 +187,13 @@ function Game:update_score_bar()
     if Snake.info.body_nums == 9 then
       Snake:add_body()
       self.score_bar.info.sy = self.score_bar.height / self.score_bar.width
+      WIN = true
       return
     end
     self.score = self.score - MAX_SCORE
 
-    if Snake.info.body_nums == 4 or Snake.info.body_nums == 8 then
+    if Snake.info.body_nums == 7 and ADD_ANOTHER_SNAKE then
+      ADD_ANOTHER_SNAKE = false
       self:add_enemy_snake()
     end
 
@@ -192,11 +207,7 @@ end
 
 function Game:draw_score()
   love.graphics.setColor(1, 0.2, 0.2, 1)
-  love.graphics.print(
-    "score: " .. tostring(math.floor(self.sum_score * 10)),
-    Basic.info.FPS.x,
-    Basic.info.FPS.y + 125
-  )
+  love.graphics.print("score: " .. tostring(math.floor(self.sum_score * 10)), Basic.info.FPS.x, Basic.info.FPS.y + 25)
 end
 
 function Game:draw_score_bar()
@@ -233,32 +244,43 @@ function Game:add_enemy_snake()
   local index = #Enemy.snake.snakes
   Enemy.snake.snakes[index].head =
       Minimap:generate_map(Enemy.snake.snakes[index].head, Enemy.snake.snakes[index].head.color)
+  Bullet:add_trait(Enemy.snake.snakes[index].head, 0.8)
 end
 
 ---------------bullet start---------------
 function Game:check_hit()
-  if #Snake.bullet.bullets == 0 then
+  if #Bullet.bullets == 0 then
     return
   end
 
   for _, object in ipairs(Basic.objects) do
-    if object.name == "enemy" then
-      for i, bullet in ipairs(Snake.bullet.bullets) do
+    for i, bullet in ipairs(Bullet.bullets) do
+      if object.name == "enemy" and bullet.name == "player" then
         for _, snake in ipairs(object) do
           if self:collision(bullet, snake.head) then
-            snake.head.health = snake.head.health - bullet.harm * ((100 - snake.head.armor) / 100)
-            table.remove(Snake.bullet.bullets, i)
+            snake.head.health = snake.head.health - bullet.harm * ((100 - snake.head.armor) / 100) * 0.6
+            table.remove(Bullet.bullets, i)
           end
           for _, body in ipairs(snake.bodys) do
             if self:collision(bullet, body) then
               body.health = body.health - bullet.harm * ((100 - body.armor) / 100)
-              table.remove(Snake.bullet.bullets, i)
+              table.remove(Bullet.bullets, i)
             end
           end
         end
       end
-    end
-    if object.name == "player" then
+      if object.name == "player" and bullet.name == "enemy" then
+        if self:collision(bullet, object.head) then
+          object.head.health = object.head.health - bullet.harm * ((100 - object.head.armor) / 100) * 0.6
+          table.remove(Bullet.bullets, i)
+        end
+        for _, body in ipairs(object.body) do
+          if self:collision(bullet, body) then
+            body.health = body.health - bullet.harm * ((100 - body.armor) / 100)
+            table.remove(Bullet.bullets, i)
+          end
+        end
+      end
     end
   end
 end
