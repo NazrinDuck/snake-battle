@@ -1,5 +1,9 @@
 Basic = require("basic")
 Snake = require("snake")
+Enemy = require("enemy")
+Minimap = require("minimap")
+Health = require("health")
+require("const")
 
 Game = {}
 
@@ -18,15 +22,6 @@ Game.resource = {
   timer = 0,
   mesh = nil,
   resources = {},
-}
-
-Game.minimap = {
-  _x = 0,
-  _y = 0,
-  height = 250,
-  width = 250,
-  mesh = nil,
-  border_mesh = nil,
 }
 
 Game.score_bar = {
@@ -54,11 +49,23 @@ function Game:collision(a, b)
 end
 
 function Game:init()
-  self:init_mesh()
+  Snake:init(250, 250, Health.generate_health)
+  Enemy:init()
 
-  Snake.head = self:generate_map(Snake.head, Snake.info.color)
-  table.insert(Basic.objects, Snake.head)
+  Minimap:init({
+    height = Basic.info.WINDOWS.HEIGHT,
+    width = Basic.info.WINDOWS.WIDTH,
+  }, Basic:get_map_border())
+  Health:init()
+
+  self:init_mesh()
   table.insert(Basic.objects, self.resource)
+
+  Snake.snake.head = Minimap:generate_map(Snake.snake.head, Snake.info.color)
+  table.insert(Basic.objects, Snake.snake)
+
+  table.insert(Basic.objects, Enemy.snake.snakes)
+  --self:add_enemy_snake()
 end
 
 function Game:init_mesh()
@@ -80,19 +87,6 @@ function Game:init_mesh()
     table.insert(vertices, { x, y, u, v })
   end
   self.resource.mesh = love.graphics.newMesh(vertices, "fan")
-  self.minimap.mesh = love.graphics.newMesh(vertices, "fan")
-
-  local height = Basic.info.WINDOWS.HEIGHT * self.minimap.height / Basic:get_map_border().height
-  local width = Basic.info.WINDOWS.WIDTH * self.minimap.width / Basic:get_map_border().width
-
-  local vertices_border = {
-    { -width / 2, -height / 2, 0, 0, 1, 1, 1 },
-    { width / 2,  -height / 2, 1, 0, 1, 1, 1 },
-    { width / 2,  height / 2,  1, 0, 1, 1, 1 },
-    { -width / 2, height / 2,  0, 0, 1, 1, 1 },
-  }
-
-  self.minimap.border_mesh = love.graphics.newMesh(vertices_border, "fan")
 
   local length = self.score_bar.width
   local vertices_score_bar = {
@@ -107,11 +101,25 @@ end
 function Game:game_start(dt)
   self:generate_resource(dt)
   self:eat_resource()
-  self:map_minimap()
+  self:check_hit()
+  Minimap:map_minimap(Basic.objects)
+  Health:update(Basic.objects)
 
-  local width, height = love.graphics.getDimensions()
-  Basic.info.WINDOWS.WIDTH = width
-  Basic.info.WINDOWS.HEIGHT = height
+  Snake:move(dt, Basic:get_map_border(), Enemy.snake.snakes)
+  Enemy:move(dt, Basic:get_map_border(), Snake.snake)
+end
+
+function Game:draw_game()
+  Basic:draw_background()
+  Basic:draw_objects()
+  Snake:draw()
+  Health:draw_health(Basic.objects)
+end
+
+function Game:draw_ui()
+  Minimap:draw_minimap(Basic.objects)
+  self:draw_score()
+  self:draw_score_bar()
 end
 
 ---resource start---
@@ -135,7 +143,7 @@ function Game:generate_resource(dt)
       radius = self.resource.radius,
     }
 
-    resource = self:generate_map(resource, self.resource.color)
+    resource = Minimap:generate_map(resource, self.resource.color)
 
     table.insert(self.resource.resources, resource)
   end
@@ -144,7 +152,7 @@ end
 
 function Game:eat_resource()
   for i, resource in ipairs(self.resource.resources) do
-    if self:collision(Snake.head, resource) then
+    if self:collision(Snake.snake.head, resource) then
       self.score = self.score + resource.value
       self.sum_score = self.sum_score + resource.value
       self:update_score_bar()
@@ -156,90 +164,6 @@ end
 
 ---resource end---
 
----------------minimap start---------------
-function Game:generate_map(object, color)
-  if object == nil then
-    return {}
-  end
-  local map_point = {
-    map_x = object.info._x * (self.minimap.width / Basic.info.WINDOWS.WIDTH),
-    map_y = object.info._y * (self.minimap.height / Basic.info.WINDOWS.HEIGHT),
-    map_color = color,
-  }
-
-  object = setmetatable(object, {
-    __index = map_point,
-  })
-
-  return object
-end
-
-function Game:map_minimap()
-  for _, object in ipairs(Basic.objects) do
-    if object.name == "head" then
-      object.map_x = object.info._x * (self.minimap.width / Basic:get_map_border().width)
-      object.map_y = object.info._y * (self.minimap.height / Basic:get_map_border().height)
-      goto continue
-    end
-
-    if object.name == "resource" then
-      for _, resource in ipairs(object.resources) do
-        resource.map_x = resource.info._x * (self.minimap.width / Basic:get_map_border().width)
-        resource.map_y = resource.info._y * (self.minimap.height / Basic:get_map_border().height)
-      end
-      goto continue
-    end
-
-    if object.name == "enemy" then
-      for _, snake in ipairs(object) do
-        snake.head.map_x = snake.head.info._x * (self.minimap.width / Basic:get_map_border().width)
-        snake.head.map_y = snake.head.info._y * (self.minimap.height / Basic:get_map_border().height)
-      end
-      goto continue
-    end
-    ::continue::
-  end
-end
-
-function Game:draw_minimap()
-  love.graphics.setColor(0, 0, 0)
-  love.graphics.rectangle("line", self.minimap._x, self.minimap._y, self.minimap.width, self.minimap.height)
-  love.graphics.setColor(0.8, 0.8, 0.8, 0.8)
-  love.graphics.rectangle("fill", self.minimap._x, self.minimap._y, self.minimap.width, self.minimap.height)
-
-  for _, object in ipairs(Basic.objects) do
-    if object.name == "head" then
-      love.graphics.setColor(0.8, 0, 0, 0.3)
-      love.graphics.draw(self.minimap.border_mesh, object.map_x, object.map_y, 0, 1, 1)
-
-      love.graphics.setColor(object.map_color)
-      love.graphics.draw(self.minimap.mesh, object.map_x, object.map_y, 0, 4, 4)
-      goto continue
-    end
-
-    if object.name == "resource" then
-      for _, resource in ipairs(object.resources) do
-        love.graphics.setColor(resource.map_color)
-        love.graphics.draw(self.minimap.mesh, resource.map_x, resource.map_y, 0, 4, 4)
-      end
-      goto continue
-    end
-
-    if object.name == "enemy" then
-      for _, snake in ipairs(object) do
-        love.graphics.setColor(snake.head.map_color)
-        love.graphics.draw(self.minimap.mesh, snake.head.map_x, snake.head.map_y, 0, 4, 4)
-      end
-      goto continue
-    end
-    ::continue::
-  end
-end
-
----------------minimap end---------------
---
---
---
 ---------------score_bar start---------------
 function Game:update_score_bar()
   if Snake.info.body_nums == 10 then
@@ -253,13 +177,12 @@ function Game:update_score_bar()
       return
     end
     self.score = self.score - MAX_SCORE
-    Snake:add_body()
 
-    --[[
-    if Snake.info.body_nums == 4 then
-      coroutine.create(Enemy.add_enemy_snake)
+    if Snake.info.body_nums == 4 or Snake.info.body_nums == 8 then
+      self:add_enemy_snake()
     end
-    ]]
+
+    Snake:add_body()
   end
 
   local max_height = self.score_bar.height
@@ -305,4 +228,41 @@ function Game:draw_score_bar()
 end
 
 ---------------score_bar end---------------
+function Game:add_enemy_snake()
+  Enemy.snake.add_snake(math.random(4, 8), Basic:get_map_border(), Health.generate_health)
+  local index = #Enemy.snake.snakes
+  Enemy.snake.snakes[index].head =
+      Minimap:generate_map(Enemy.snake.snakes[index].head, Enemy.snake.snakes[index].head.color)
+end
+
+---------------bullet start---------------
+function Game:check_hit()
+  if #Snake.bullet.bullets == 0 then
+    return
+  end
+
+  for _, object in ipairs(Basic.objects) do
+    if object.name == "enemy" then
+      for i, bullet in ipairs(Snake.bullet.bullets) do
+        for _, snake in ipairs(object) do
+          if self:collision(bullet, snake.head) then
+            snake.head.health = snake.head.health - bullet.harm * ((100 - snake.head.armor) / 100)
+            table.remove(Snake.bullet.bullets, i)
+          end
+          for _, body in ipairs(snake.bodys) do
+            if self:collision(bullet, body) then
+              body.health = body.health - bullet.harm * ((100 - body.armor) / 100)
+              table.remove(Snake.bullet.bullets, i)
+            end
+          end
+        end
+      end
+    end
+    if object.name == "player" then
+    end
+  end
+end
+
+function Game:check_colliion() end
+
 return Game

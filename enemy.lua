@@ -1,7 +1,5 @@
-Game = require("game")
+require("const")
 Enemy = {}
-
-MAX_ENEMY = 1
 
 Enemy.snake = {
   nums = 0,
@@ -10,6 +8,9 @@ Enemy.snake = {
   color = { 204 / 255, 0, 0 },
 
   snakes = {},
+  add_snake = nil,
+
+  bullets = {},
 }
 
 local function distance(a, b)
@@ -24,18 +25,50 @@ local function angle(a, b)
 end
 
 function Enemy:init()
+  self.snake.add_snake = coroutine.wrap(Enemy.add_snake)
   self.snake.snakes.name = "enemy"
-  local co = coroutine.create(Enemy.add_enemy_snake)
-  coroutine.resume(co, 4)
-  table.insert(Basic.objects, self.snake.snakes)
 end
 
-function Enemy:move(dt)
-  local border = Basic:get_map_border()
+function Enemy:move(dt, border, player)
+  local turn_border = {
+    height = border.height - MIN_DISTANCE,
+    width = border.width - MIN_DISTANCE,
+  }
   for _, snake in ipairs(self.snake.snakes) do
     local new_x = snake.head.info._x + dt * snake.head.speed * math.cos(snake.head.info.rot)
     local new_y = snake.head.info._y + dt * snake.head.speed * math.sin(snake.head.info.rot)
 
+    ------ avoid collision ------
+    if new_x - snake.head.info.ox * SIZE < MIN_DISTANCE or new_y - snake.head.info.oy * SIZE < MIN_DISTANCE then
+      snake.head.info.rot = snake.head.info.rot + dt * self.snake.rot_speed
+    end
+
+    if
+        new_x + snake.head.info.ox * SIZE >= turn_border.width
+        or new_y + snake.head.info.oy * SIZE >= turn_border.height
+    then
+      snake.head.info.rot = snake.head.info.rot - dt * self.snake.rot_speed
+    end
+
+    ------ if collision ------
+
+    local dis = distance({ _x = new_x, _y = new_y }, player.head.info)
+
+    if dis <= player.head.radius then
+      snake.head.health = snake.head.health - (HARM * dt) * ((100 - snake.head.armor) / 100)
+      player.head.health = player.head.health - (HARM * dt) * ((100 - player.head.armor) / 100)
+      goto continue
+    end
+    for _, body in ipairs(player.body) do
+      if distance({ _x = new_x, _y = new_y }, body.info) <= body.radius then
+        snake.head.health = snake.head.health - (HARM * dt) * ((100 - snake.head.armor) / 100)
+        body.health = body.health - (HARM * dt) * ((100 - body.armor) / 100)
+        goto continue
+      end
+    end
+    ------ track ------
+
+    Enemy:track_player(dt, Snake.snake, snake)
     if
         new_x - snake.head.info.ox * SIZE >= 0
         and new_x + snake.head.info.ox * SIZE < border.width
@@ -44,9 +77,9 @@ function Enemy:move(dt)
     then
       snake.head.info._x = new_x
       snake.head.info._y = new_y
-    else
-      snake.head.info.rot = snake.head.info.rot + dt * self.snake.rot_speed
     end
+    ::continue::
+    ------ body move ------
 
     for i, body in ipairs(snake.bodys) do
       local pre = {}
@@ -63,35 +96,41 @@ function Enemy:move(dt)
 
       if distance(body.info, pre.info) >= 75 and body.speed <= SPEED_HIGH then
         body.speed = body.speed + dt * self.snake.accelerate
-        goto continue
+        goto continue_end
       elseif distance(body.info, pre.info) <= 50 and body.speed >= SPEED_LOW then
         body.speed = body.speed - dt * self.snake.accelerate
-        goto continue
+        goto continue_end
       end
 
       if body.speed >= SPEED_NORMAL then
         body.speed = body.speed - dt * self.snake.accelerate
-        goto continue
+        goto continue_end
       else
         body.speed = body.speed + dt * self.snake.accelerate
-        goto continue
+        goto continue_end
       end
-      ::continue::
+      ::continue_end::
     end
   end
 end
 
-function Enemy.add_enemy_snake(body_nums)
-  local x = math.random() * Basic:get_map_border().width
-  local y = math.random() * Basic:get_map_border().height
+function Enemy.add_snake(body_nums, border, func_health)
+  ::restart::
+
+  border = {
+    height = border.height - MIN_DISTANCE * 2,
+    width = border.width - MIN_DISTANCE * 2,
+  }
+
+  local x = math.random() * border.width + MIN_DISTANCE
+  local y = math.random() * border.height + MIN_DISTANCE
 
   local snake = {}
   local head = {
-    name = "head",
     info = {
       _x = x,
       _y = y,
-      rot = 0,
+      rot = math.random() * 2 * math.pi,
       sx = SIZE,
       sy = SIZE,
       ox = 0,
@@ -105,11 +144,11 @@ function Enemy.add_enemy_snake(body_nums)
   head.info.ox = head.image:getWidth() / 2
   head.info.oy = head.image:getHeight() / 2
   head.radius = (head.info.ox + head.info.oy) * SIZE / 2
+  head = func_health(head, 100, ARMOR * (body_nums + 1))
 
   local bodys = {}
   for i = 1, body_nums, 1 do
     local body = {
-      name = "head",
       info = {
         _x = x + 20 * i,
         _y = y,
@@ -127,6 +166,7 @@ function Enemy.add_enemy_snake(body_nums)
     body.info.ox = body.image:getWidth() / 2
     body.info.oy = body.image:getHeight() / 2
     body.radius = (body.info.ox + body.info.oy) * SIZE / 2
+    body = func_health(body, 100, 0)
     table.insert(bodys, body)
   end
 
@@ -147,17 +187,34 @@ function Enemy.add_enemy_snake(body_nums)
   tail.info.ox = tail.image:getWidth() / 2
   tail.info.oy = tail.image:getHeight() / 2
   tail.radius = (tail.info.ox + tail.info.oy) * SIZE / 2
-
-  head = Game:generate_map(head, head.color)
+  tail = func_health(tail, 100, 0)
+  table.insert(bodys, tail)
 
   snake.head = head
   snake.bodys = bodys
-  table.insert(bodys, tail)
 
   snake.color = Enemy.snake.color
-
   table.insert(Enemy.snake.snakes, snake)
-  print(1)
+  coroutine.yield()
+  goto restart
+end
+
+function Enemy:track_player(dt, player, snake)
+  local dis = distance(player.head.info, snake.head.info)
+  local dangle = angle(snake.head.info, player.head.info)
+  if dis <= 800 and dis >= 300 then
+    if snake.head.info.rot < dangle then
+      snake.head.info.rot = snake.head.info.rot + dt * self.snake.rot_speed
+    else
+      snake.head.info.rot = snake.head.info.rot - dt * self.snake.rot_speed
+    end
+  elseif dis < 300 then
+    if snake.head.info.rot < -dangle then
+      snake.head.info.rot = snake.head.info.rot + dt * self.snake.rot_speed
+    else
+      snake.head.info.rot = snake.head.info.rot - dt * self.snake.rot_speed
+    end
+  end
 end
 
 return Enemy

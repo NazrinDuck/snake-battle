@@ -20,6 +20,7 @@ Basic.info = {
     y = 250,
     fps = 0,
   },
+  bgm = love.audio.newSource("audios/bgm.wav", "stream"),
 }
 
 Basic.objects = {}
@@ -33,9 +34,13 @@ function Basic:init()
   if not success then
     print("fail")
   end
+
+  local width, height = love.graphics.getDimensions()
+  Basic.info.WINDOWS.WIDTH = width
+  Basic.info.WINDOWS.HEIGHT = height
 end
 
-function Basic:draw()
+function Basic:draw_background()
   love.graphics.setColor(1, 1, 1, 1)
   love.graphics.draw(
     self.info.WINDOWS.BACKGROUND.image,
@@ -47,21 +52,35 @@ function Basic:draw()
     self.info.WINDOWS.BACKGROUND.ox,
     self.info.WINDOWS.BACKGROUND.oy
   )
+end
 
+function Basic:draw_objects()
   for _, object in ipairs(self.objects) do
-    if object.name == "head" then
+    if object.name == "player" then
       love.graphics.setColor(object.color)
       love.graphics.draw(
-        object.image,
-        object.info._x,
-        object.info._y,
-        object.info.rot,
-        object.info.sx,
-        object.info.sy,
-        object.info.ox,
-        object.info.oy
+        object.head.image,
+        object.head.info._x,
+        object.head.info._y,
+        object.head.info.rot,
+        object.head.info.sx,
+        object.head.info.sy,
+        object.head.info.ox,
+        object.head.info.oy
       )
-      goto continue
+
+      for _, body in ipairs(object.body) do
+        love.graphics.draw(
+          body.image,
+          body.info._x,
+          body.info._y,
+          body.info.rot,
+          body.info.sx,
+          body.info.sy,
+          body.info.ox,
+          body.info.oy
+        )
+      end
     end
 
     if object.name == "resource" then

@@ -1,52 +1,50 @@
+require("const")
 Snake = {}
-
-SIZE = 0.2
-
-SPEED_LOW = 125
-SPEED_NORMAL = 225
-SPEED_HIGH = 280
 
 Snake.info = {
   body_nums = 1,
   accelerate = 250,
   rot_speed = math.pi * 0.5,
   color = { 0, 153 / 255, 76 / 255 },
+  func_health = nil,
 }
 
-Snake.snake = {}
-
-Snake.head = {
-  name = "head",
-  info = {
-    _x = 0,
-    _y = 0,
-    rot = 0,
-    sx = SIZE,
-    sy = SIZE,
-    ox = 0,
-    oy = 0,
-  },
+Snake.snake = {
+  name = "player",
   color = Snake.info.color,
-  radius = 0,
-  speed = SPEED_NORMAL,
-  image = love.graphics.newImage("images/head.png"),
-}
-
-Snake.body = {}
-
-Snake.tail = {
-  info = {
-    _x = 0,
-    _y = 0,
-    rot = 0,
-    sx = SIZE,
-    sy = SIZE,
-    ox = 0,
-    oy = 0,
+  head = {
+    name = "head",
+    info = {
+      _x = 0,
+      _y = 0,
+      rot = 0,
+      sx = SIZE,
+      sy = SIZE,
+      ox = 0,
+      oy = 0,
+    },
+    color = Snake.info.color,
+    radius = 0,
+    speed = SPEED_NORMAL,
+    image = love.graphics.newImage("images/head.png"),
   },
-  radius = 0,
-  speed = SPEED_NORMAL,
-  image = love.graphics.newImage("images/tail.png"),
+
+  body = {},
+
+  tail = {
+    info = {
+      _x = 0,
+      _y = 0,
+      rot = 0,
+      sx = SIZE,
+      sy = SIZE,
+      ox = 0,
+      oy = 0,
+    },
+    radius = 0,
+    speed = SPEED_NORMAL,
+    image = love.graphics.newImage("images/tail.png"),
+  },
 }
 
 Snake.bullet = {
@@ -55,7 +53,7 @@ Snake.bullet = {
   speed = 150,
   radius = 12,
   fly_time = 3,
-  shoot_gap = 1.5,
+  shoot_gap = 0.5,
   timer = 0,
 }
 
@@ -70,12 +68,14 @@ local function angle(a, b)
   return math.atan((a._y - b._y) / (a._x - b._x)) + math.pi
 end
 
-function Snake:init(_x, _y)
-  self.head.info._x = _x
-  self.head.info._y = _y
-  self.head.info.ox = self.head.image:getWidth() / 2
-  self.head.info.oy = self.head.image:getHeight() / 2
-  self.head.radius = (self.head.info.ox + self.head.info.oy) * SIZE / 2
+function Snake:init(_x, _y, func_health)
+  self.info.func_health = func_health
+  self.snake.head.info._x = _x
+  self.snake.head.info._y = _y
+  self.snake.head.info.ox = self.snake.head.image:getWidth() / 2
+  self.snake.head.info.oy = self.snake.head.image:getHeight() / 2
+  self.snake.head.radius = (self.snake.head.info.ox + self.snake.head.info.oy) * SIZE / 2
+  self.snake.head = self.info.func_health(self.snake.head, 100, ARMOR)
 
   local body = {
     info = {
@@ -94,15 +94,18 @@ function Snake:init(_x, _y)
   body.info.ox = body.image:getWidth() / 2
   body.info.oy = body.image:getHeight() / 2
   body.radius = (body.info.ox + body.info.oy) * SIZE / 2
+  body = self.info.func_health(body, 100, 0)
 
-  table.insert(self.body, body)
+  table.insert(self.snake.body, body)
 
-  self.tail.info._x = _x - 60
-  self.tail.info._y = _y
-  self.tail.info.ox = self.tail.image:getWidth() / 2
-  self.tail.info.oy = self.tail.image:getHeight() / 2
-  self.tail.radius = (self.tail.info.ox + self.tail.info.oy) * SIZE / 2
-  table.insert(self.body, self.tail)
+  self.snake.tail.info._x = _x - 60
+  self.snake.tail.info._y = _y
+  self.snake.tail.info.ox = self.snake.tail.image:getWidth() / 2
+  self.snake.tail.info.oy = self.snake.tail.image:getHeight() / 2
+  self.snake.tail.radius = (self.snake.tail.info.ox + self.snake.tail.info.oy) * SIZE / 2
+  self.snake.tail = self.info.func_health(self.snake.tail, 100, 0)
+
+  table.insert(self.snake.body, self.snake.tail)
 
   self:init_mesh()
 end
@@ -126,23 +129,40 @@ function Snake:init_mesh()
   self.bullet.mesh = love.graphics.newMesh(vertices, "fan")
 end
 
-function Snake:move(dt, border)
+function Snake:move(dt, border, enemy)
   border = border or {
     height = 0,
     width = 0,
   }
-  local new_x = self.head.info._x + dt * self.head.speed * math.cos(self.head.info.rot)
-  local new_y = self.head.info._y + dt * self.head.speed * math.sin(self.head.info.rot)
+  local new_x = self.snake.head.info._x + dt * self.snake.head.speed * math.cos(self.snake.head.info.rot)
+  local new_y = self.snake.head.info._y + dt * self.snake.head.speed * math.sin(self.snake.head.info.rot)
+  for _, snake in ipairs(enemy) do
+    if distance({ _x = new_x, _y = new_y }, snake.head.info) <= snake.head.radius then
+      self.snake.head.health = self.snake.head.health - (HARM * dt) * ((100 - self.snake.head.armor) / 100)
+      snake.head.health = snake.head.health - (HARM * dt) * ((100 - snake.head.armor) / 100)
+      goto continue
+    end
+    for _, body in ipairs(snake.bodys) do
+      if distance({ _x = new_x, _y = new_y }, body.info) <= body.radius then
+        self.snake.head.health = self.snake.head.health - (HARM * dt) * ((100 - self.snake.head.armor) / 100)
+        body.health = body.health - (HARM * dt) * ((100 - body.armor) / 100)
+        goto continue
+      end
+    end
+  end
 
   if
-      new_x - self.head.info.ox * SIZE >= 0
-      and new_x + self.head.info.ox * SIZE < border.width
-      and new_y - self.head.info.oy * SIZE >= 0
-      and new_y + self.head.info.oy * SIZE < border.height
+      new_x - self.snake.head.info.ox * SIZE >= 0
+      and new_x + self.snake.head.info.ox * SIZE < border.width
+      and new_y - self.snake.head.info.oy * SIZE >= 0
+      and new_y + self.snake.head.info.oy * SIZE < border.height
   then
-    self.head.info._x = new_x
-    self.head.info._y = new_y
+    self.snake.head.info._x = new_x
+    self.snake.head.info._y = new_y
+  else
+    self.snake.head.health = self.snake.head.health - (HARM * dt) * ((100 - self.snake.head.armor) / 100)
   end
+  ::continue::
 
   self:keyboard_reaction(dt)
   self:shoot(dt)
@@ -151,12 +171,12 @@ function Snake:move(dt, border)
 end
 
 function Snake:move_body(dt)
-  for i, body in ipairs(self.body) do
+  for i, body in ipairs(self.snake.body) do
     local pre = {}
     if i == 1 then
-      pre = self.head
+      pre = self.snake.head
     else
-      pre = self.body[i - 1]
+      pre = self.snake.body[i - 1]
     end
     body.info._x = body.info._x + dt * body.speed * math.cos(body.info.rot)
     body.info._y = body.info._y + dt * body.speed * math.sin(body.info.rot)
@@ -184,48 +204,35 @@ function Snake:move_body(dt)
 end
 
 function Snake:keyboard_reaction(dt)
-  if love.keyboard.isDown("up") and self.head.speed <= SPEED_HIGH then
-    self.head.speed = self.head.speed + dt * self.info.accelerate
-  elseif self.head.speed >= SPEED_NORMAL then
-    self.head.speed = self.head.speed - dt * self.info.accelerate
+  if love.keyboard.isDown("up") and self.snake.head.speed <= SPEED_HIGH then
+    self.snake.head.speed = self.snake.head.speed + dt * self.info.accelerate
+  elseif self.snake.head.speed >= SPEED_NORMAL then
+    self.snake.head.speed = self.snake.head.speed - dt * self.info.accelerate
   end
 
-  if love.keyboard.isDown("down") and self.head.speed >= SPEED_LOW then
-    self.head.speed = self.head.speed - dt * self.info.accelerate
-  elseif self.head.speed <= SPEED_NORMAL then
-    self.head.speed = self.head.speed + dt * self.info.accelerate
+  if love.keyboard.isDown("down") and self.snake.head.speed >= SPEED_LOW then
+    self.snake.head.speed = self.snake.head.speed - dt * self.info.accelerate
+  elseif self.snake.head.speed <= SPEED_NORMAL then
+    self.snake.head.speed = self.snake.head.speed + dt * self.info.accelerate
   end
 
   if love.keyboard.isDown("left") then
-    self.head.info.rot = self.head.info.rot - self.info.rot_speed * dt
+    self.snake.head.info.rot = self.snake.head.info.rot - self.info.rot_speed * dt
   end
   if love.keyboard.isDown("right") then
-    self.head.info.rot = self.head.info.rot + self.info.rot_speed * dt
+    self.snake.head.info.rot = self.snake.head.info.rot + self.info.rot_speed * dt
   end
 end
 
 function Snake:draw()
-  love.graphics.setColor(self.info.color)
-  for _, body in ipairs(self.body) do
-    love.graphics.draw(
-      body.image,
-      body.info._x,
-      body.info._y,
-      body.info.rot,
-      body.info.sx,
-      body.info.sy,
-      body.info.ox,
-      body.info.oy
-    )
-  end
   self:draw_bullet()
 end
 
 function Snake:add_body()
-  local index = #self.body - 1
-  local new_x = self.body[index].info._x
-  local new_y = self.body[index].info._y
-  local new_rot = self.body[index].info.rot
+  local index = #self.snake.body - 1
+  local new_x = self.snake.body[index].info._x
+  local new_y = self.snake.body[index].info._y
+  local new_rot = self.snake.body[index].info.rot
 
   local body = {
     info = {
@@ -244,10 +251,12 @@ function Snake:add_body()
   body.info.ox = body.image:getWidth() / 2
   body.info.oy = body.image:getHeight() / 2
   body.radius = (body.info.ox + body.info.oy) * SIZE / 2
+  body = self.info.func_health(body, 100, 0)
 
-  table.insert(self.body, index, body)
+  table.insert(self.snake.body, index, body)
 
-  Snake.info.body_nums = #self.body
+  Snake.info.body_nums = #self.snake.body
+  Snake.snake.head.armor = Snake.snake.head.armor + ARMOR
 end
 
 ----- shoot start -----
@@ -262,13 +271,15 @@ function Snake:shoot(dt)
     self.bullet.timer = 0
     local bullet = {
       info = {
-        _x = self.head.info._x,
-        _y = self.head.info._y,
-        rot = self.head.info.rot,
+        _x = self.snake.head.info._x,
+        _y = self.snake.head.info._y,
+        rot = self.snake.head.info.rot,
       },
-      speed = self.bullet.speed + self.head.speed,
+      radius = self.bullet.radius,
+      speed = self.bullet.speed + self.snake.head.speed,
       color = self.info.color,
       timer = 0,
+      harm = 8 + math.random(2, 6),
     }
     table.insert(self.bullet.bullets, bullet)
   end
